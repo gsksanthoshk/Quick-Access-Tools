@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Attendance Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --accent: #007bff;
+      --muted: #6b7280;
+      --card-bg: #fff;
+      --page-bg: #f5f7fa;
+      --btn-radius: 8px;
+    }
+    *{box-sizing: border-box}
+    body {
+      font-family: system-ui, sans-serif;
+      background: var(--page-bg);
+      margin: 0;
+      padding: 20px;
+      color: #111827;
+    }
+
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: var(--card-bg);
+      padding: 18px;
+      border-radius: 12px;
+      margin-bottom: 18px;
+      box-shadow: 0 6px 18px rgba(12, 15, 20, .06);
+    }
+
+    h1 { margin: 0 0 12px 0; font-size: 20px; display:inline-block; vertical-align:middle; }
+    .top-row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
+
+    /* Controls layout */
+    .controls {
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      align-items: center;
+    }
+    .controls label { display:flex; flex-direction:column; align-items:flex-start; gap:6px; font-size:14px; color:var(--muted); }
+    .controls select, .controls input {
+      width:100%;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid #d1d5db;
+      background: #fff;
+    }
+
+    /* Buttons row */
+    .btn-row {
+      display:flex;
+      gap:10px;
+      margin-top: 12px;
+      flex-wrap:wrap;
+    }
+    .btn {
+      --pad-vertical:10px;
+      --pad-horizontal:14px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      padding: var(--pad-vertical) var(--pad-horizontal);
+      border-radius: var(--btn-radius);
+      border: none;
+      cursor: pointer;
+      font-weight:600;
+      min-width: 130px;
+      background: var(--accent);
+      color: white;
+      transition: transform .08s ease, box-shadow .08s ease;
+    }
+    .btn:hover{ transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,.08); }
+    .btn.secondary { background: #6b7280; min-width: 120px; }
+    .btn.ghost { background: transparent; color: var(--accent); border: 1px solid rgba(0,123,255,.12); min-width: 110px; }
+    .btn.danger { background: #ef4444; }
+    .btn.small { min-width: 90px; padding:8px 10px; font-weight:600; }
+
+    /* Calendar grid */
+    .calendar { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; margin-top: 12px; }
+    .day { padding: 14px; border-radius: 10px; background: #f3f4f6; cursor: pointer; user-select:none; text-align:center; font-weight:600; transition: transform .08s ease; }
+    .day:hover { transform: translateY(-4px); }
+    .present { background: #16a34a; color: white; }
+    .absent { background: #ef4444; color: white; }
+    .holiday { background: #9ca3af; color: white; }
+
+    /* Charts */
+    canvas { width:100% !important; height: auto !important; }
+
+    /* Summary / prediction */
+    #summary { margin-top:10px; font-weight:700; }
+    #prediction { margin-top:8px; color:var(--muted); font-size:0.95rem; }
+
+    /* Responsive */
+    @media (max-width:900px) {
+      .controls { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width:560px) {
+      .controls { grid-template-columns: 1fr; }
+      .btn { min-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="top-row">
+        <h1>📊 Attendance Calculator</h1>
+        <div style="color:var(--muted); font-size:14px;">Manage L / T / P / S separately</div>
+      </div>
+
+      <div class="controls" role="group" aria-label="Attendance controls">
+        <label>
+          Subject
+          <select id="subject" aria-label="Select subject">
+            <option value="Lecture">Lecture (L)</option>
+            <option value="Tutorial">Tutorial (T)</option>
+            <option value="Practical">Practical (P)</option>
+            <option value="Seminar">Seminar (S)</option>
+          </select>
+        </label>
+
+        <label>
+          Requirement %
+          <select id="req" aria-label="Requirement percent">
+            <option value="75">75%</option>
+            <option value="65">65%</option>
+            <option value="80">80%</option>
+          </select>
+        </label>
+
+        <label>
+          Present
+          <input type="number" id="present" min="0" value="0" aria-label="Present classes">
+        </label>
+
+        <label>
+          Total
+          <input type="number" id="total" min="0" value="0" aria-label="Total classes">
+        </label>
+
+        <!-- Spacer: use an empty element to balance grid layout on wide screens -->
+        <div style="display:flex; align-items:center; justify-content:flex-start;">
+          <div style="color:var(--muted); font-size:13px;">Click Generate to build calendar</div>
+        </div>
+      </div>
+
+      <div class="btn-row" role="group" aria-label="Actions">
+        <button class="btn" onclick="generateAttendance()" title="Generate calendar from Present/Total">🧾 Generate</button>
+        <button class="btn secondary" onclick="saveAttendance()" title="Save attendance to localStorage">💾 Save</button>
+        <button class="btn secondary" onclick="loadAttendance()" title="Load saved attendance">📂 Load</button>
+        <button class="btn ghost" onclick="exportCSV()" title="Export to CSV">⬇️ Export CSV</button>
+        <button class="btn ghost" onclick="predictNext()" title="See effect of next class">🔮 Predict Next</button>
+      </div>
+
+      <p id="summary" aria-live="polite"></p>
+      <p id="prediction"></p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 12px 0;">🗓 Attendance Calendar — click to toggle</h3>
+      <div id="calendar" class="calendar" aria-label="Attendance calendar"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 12px 0;">📊 Charts (per subject)</h3>
+      <canvas id="pieChart"></canvas>
+      <div style="height:12px;"></div>
+      <canvas id="weekChart"></canvas>
+    </div>
+  </div>
+
+<script>
+/* --- Data & helpers (same logic as before) --- */
+let dataStore = { Lecture:{}, Tutorial:{}, Practical:{}, Seminar:{} };
+let total = { Lecture:0, Tutorial:0, Practical:0, Seminar:0 };
+let present = { Lecture:0, Tutorial:0, Practical:0, Seminar:0 };
+let required = 75;
+
+function currentSubject(){ return document.getElementById('subject').value; }
+
+function generateAttendance(){
+  const subj = currentSubject();
+  present[subj] = Number(document.getElementById('present').value) || 0;
+  total[subj] = Number(document.getElementById('total').value) || 0;
+  required = Number(document.getElementById('req').value);
+
+  if (total[subj] <= 0 || present[subj] < 0 || present[subj] > total[subj]) {
+    alert('Enter valid numbers (Present must be between 0 and Total, and Total > 0).');
+    return;
+  }
+  dataStore[subj] = {};
+  for (let i=1; i<= total[subj]; i++){
+    dataStore[subj][i] = (i <= present[subj]) ? 'present' : 'absent';
+  }
+  updateSummary(); renderCalendar(); drawCharts();
+}
+
+function updateSummary(){
+  const subj = currentSubject();
+  const attended = Object.values(dataStore[subj]).filter(v=>v==='present').length;
+  const totalClasses = Object.values(dataStore[subj]).filter(v=>v!=='holiday').length;
+  const percent = totalClasses ? (attended/totalClasses*100) : 0;
+  const need = Math.max(0, Math.ceil((required/100)*totalClasses) - attended);
+  const el = document.getElementById('summary');
+  el.innerHTML = `(${subj}) ${attended} / ${totalClasses} → ${percent.toFixed(2)}% &nbsp; ` +
+    (percent >= required ? `✅ Requirement met (${required}%)` : `⚠️ Need ${need} more to reach ${required}%`);
+  el.style.color = percent >= required ? 'green' : 'red';
+  // clear prediction text when summary updates
+  document.getElementById('prediction').textContent = '';
+}
+
+function renderCalendar(){
+  const subj = currentSubject();
+  const cal = document.getElementById('calendar');
+  cal.innerHTML = '';
+  const n = Math.max(0, total[subj]||0);
+  for (let i=1; i<= n; i++){
+    const cell = document.createElement('div');
+    const state = dataStore[subj][i] || 'absent';
+    cell.className = 'day ' + state;
+    cell.textContent = `Day ${i}`;
+    cell.setAttribute('role','button');
+    cell.setAttribute('tabindex','0');
+    cell.onclick = () => toggleDay(subj, i);
+    // allow keyboard activation
+    cell.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDay(subj,i); } });
+    cal.appendChild(cell);
+  }
+}
+
+function toggleDay(subj, i){
+  dataStore[subj][i] = dataStore[subj][i] === 'holiday' ? 'present' :
+                      dataStore[subj][i] === 'present' ? 'absent' : 'holiday';
+  renderCalendar(); updateSummary(); drawCharts();
+}
+
+/* persistence and CSV */
+function saveAttendance(){
+  try {
+    localStorage.setItem('attendanceData', JSON.stringify({dataStore,total,present,required}));
+    alert('Saved ✅');
+  } catch (e) {
+    alert('Error saving data: ' + e.message);
+  }
+}
+function loadAttendance(){
+  const data = JSON.parse(localStorage.getItem('attendanceData'));
+  if (data) {
+    dataStore = data.dataStore || dataStore;
+    total = data.total || total;
+    present = data.present || present;
+    required = data.required || required;
+    renderCalendar(); updateSummary(); drawCharts();
+    alert('Loaded saved attendance ✅');
+  } else alert('No saved data found');
+}
+
+function exportCSV(){
+  let csv = 'Subject,Day,Status\n';
+  for (const subj in dataStore){
+    for (let i=1; i<= (total[subj]||0); i++){
+      csv += `${subj},Day ${i},${dataStore[subj][i]||'absent'}\n`;
+    }
+  }
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'attendance.csv';
+  a.click();
+}
+
+/* predictor */
+function predictNext(){
+  const subj = currentSubject();
+  const attended = Object.values(dataStore[subj]).filter(v=>'present'===v).length;
+  const totalClasses = Object.values(dataStore[subj]).filter(v=>v!=='holiday').length;
+  const attendNext = ((attended+1)/(totalClasses+1))*100;
+  const skipNext = (attended/(totalClasses+1))*100;
+  const out = document.getElementById('prediction');
+  out.innerHTML = `If you attend next: <b>${attendNext.toFixed(2)}%</b> &nbsp; ${attendNext>=required? '✅' : '⚠️'}<br>` +
+                  `If you skip next: <b>${skipNext.toFixed(2)}%</b> &nbsp; ${skipNext>=required? '✅' : '⚠️'}`;
+}
+
+/* Charts */
+let pieChart, weekChart;
+function drawCharts(){
+  const subj = currentSubject();
+  const p = Object.values(dataStore[subj]).filter(v=>'present'===v).length;
+  const a = Object.values(dataStore[subj]).filter(v=>'absent'===v).length;
+  const h = Object.values(dataStore[subj]).filter(v=>'holiday'===v).length;
+
+  /* Pie */
+  const ctx1 = document.getElementById('pieChart').getContext('2d');
+  if (pieChart) pieChart.destroy();
+  pieChart = new Chart(ctx1, {
+    type: 'pie',
+    data: { labels:['Present','Absent','Holiday'], datasets:[{ data:[p,a,h], backgroundColor:['#16a34a','#ef4444','#9ca3af'] }] }
+  });
+
+  /* Weekly line */
+  const ctx2 = document.getElementById('weekChart').getContext('2d');
+  if (weekChart) weekChart.destroy();
+  const weeks = Math.max(1, Math.ceil((total[subj]||0)/7));
+  const weekData = [];
+  for (let w=0; w<weeks; w++){
+    const start = w*7+1, end = Math.min(total[subj]||0, (w+1)*7);
+    let days = 0, pres = 0;
+    for (let d=start; d<=end; d++){
+      const val = (dataStore[subj]||{})[d];
+      if (val !== 'holiday') { days++; if(val === 'present') pres++; }
+    }
+    weekData.push(days? (pres/days*100) : 0);
+  }
+  weekChart = new Chart(ctx2, {
+    type: 'line',
+    data: { labels: weekData.map((_,i)=>'Week '+(i+1)), datasets:[{ label: subj+' Weekly %', data: weekData, borderColor: 'rgba(3,105,255,1)', backgroundColor:'rgba(3,105,255,0.12)', fill:true, tension:0.3 }] },
+    options: { scales: { y: { beginAtZero: true, max: 100 } } }
+  });
+}
+
+/* init */
+window.addEventListener('load', () => {
+  const data = JSON.parse(localStorage.getItem('attendanceData') || 'null');
+  if (data) { dataStore = data.dataStore || dataStore; total = data.total || total; present = data.present || present; required = data.required || required; }
+  renderCalendar(); updateSummary(); drawCharts();
+});
+
+/* keep charts subject-aware */
+document.getElementById('subject').addEventListener('change', () => { renderCalendar(); updateSummary(); drawCharts(); });
+</script>
+</body>
+</html>

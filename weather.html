@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Weather — Enhanced</title>
+  <style>
+    :root{
+      --bg:#f3f7fb; --card:#ffffff; --accent:#0b74ff; --muted:#6b7280; --glass:rgba(11,116,255,0.08);
+    }
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial; margin:0; background:linear-gradient(180deg,#f7fbff,#eef6ff); padding:18px; display:flex; justify-content:center;}
+    .wrap{ width:100%; max-width:1100px; display:grid; grid-template-columns: 380px 1fr; gap:18px; align-items:start; }
+    .card{ background:var(--card); border-radius:12px; padding:14px; box-shadow:0 10px 30px rgba(2,6,23,0.06); border:1px solid var(--glass); }
+    header h1{ margin:0; font-size:18px; }
+    .searchRow{ display:flex; gap:8px; margin-top:10px; }
+    input[type="search"]{ flex:1; padding:10px 12px; border-radius:10px; border:1px solid #e6eef8; background:transparent; outline:none; }
+    button{ padding:10px 12px; border-radius:10px; border:none; cursor:pointer; font-weight:700; }
+    button.primary{ background:var(--accent); color:white; }
+    button.ghost{ background:transparent; border:1px solid rgba(0,0,0,0.06); color:var(--muted); }
+    .small{ font-size:13px; color:var(--muted); }
+    .current { display:flex; gap:12px; align-items:center; margin-top:12px; }
+    .bigTemp{ font-size:46px; font-weight:800; margin-right:8px; color:#0747a6; }
+    .cond{ font-weight:700; color:#0b74ff; }
+    .metaGrid{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:10px; }
+    .metaItem{ background:#f6fbff; padding:8px; border-radius:8px; font-size:13px; display:flex; justify-content:space-between; align-items:center; }
+    .forecastRow{ display:flex; gap:8px; margin-top:12px; overflow:auto; padding-bottom:6px; }
+    .dayCard{ min-width:160px; background:linear-gradient(180deg,#fff,#fbfdff); padding:12px; border-radius:10px; border:1px solid #edf6ff; cursor:pointer; box-shadow:0 8px 20px rgba(3,105,255,0.03); }
+    .dayCard.selected{ box-shadow: 0 12px 30px rgba(3,105,255,0.08); transform: translateY(-6px); }
+    .hourGrid{ display:grid; grid-template-columns: repeat(auto-fill,minmax(120px,1fr)); gap:8px; margin-top:12px; }
+    .hourCard{ background:#fff; padding:10px; border-radius:10px; border:1px solid #f1f5f9; font-size:13px; }
+    .history { margin-top:12px; display:flex; flex-direction:column; gap:6px; }
+    .histItem{ padding:8px; border-radius:8px; background:#fbfdff; border:1px solid #eef6ff; cursor:pointer; font-weight:600; color:#0b74ff; }
+    .toolbar{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+    .footerNote{ margin-top:10px; font-size:12px; color:var(--muted); }
+    @media (max-width:980px){
+      .wrap{ grid-template-columns: 1fr; }
+      .forecastRow{ justify-content:flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- LEFT: search, quick info, history -->
+    <div class="card">
+      <header>
+        <h1>🌦 Quick Weather</h1>
+        <div class="small">Detailed + 3-day forecast</div>
+      </header>
+
+      <div class="searchRow">
+        <input id="cityInput" type="search" placeholder="City or place (e.g. London, Mumbai)" />
+        <button id="searchBtn" class="primary">Check</button>
+      </div>
+
+      <div class="toolbar">
+        <button id="geoBtn" class="ghost">📍 Use my location</button>
+        <button id="exportBtn" class="ghost">⬇ Export JSON</button>
+        <button id="copyBtn" class="ghost">📋 Copy Summary</button>
+      </div>
+
+      <div id="loading" class="small" style="margin-top:10px;display:none;">Loading…</div>
+      <div id="error" class="small" style="color:#d33; margin-top:8px; display:none;"></div>
+
+      <div id="currentBlock" style="display:none;">
+        <div class="current">
+          <div>
+            <div id="condEmoji" style="font-size:44px; text-align:center;">🌤</div>
+          </div>
+          <div>
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div class="bigTemp" id="tempNow">--°C</div>
+              <div>
+                <div class="cond" id="condText">—</div>
+                <div class="small" id="locText">—</div>
+                <div class="small" id="timeText">Updated —</div>
+              </div>
+            </div>
+
+            <div class="metaGrid" id="metaGrid">
+              <div class="metaItem"><div>Feels</div><div id="feels">—</div></div>
+              <div class="metaItem"><div>Humidity</div><div id="hum">—</div></div>
+              <div class="metaItem"><div>Wind</div><div id="wind">—</div></div>
+              <div class="metaItem"><div>Visibility</div><div id="vis">—</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <div style="font-weight:800">3-Day Forecast</div>
+          <div class="forecastRow" id="forecastRow" role="list"></div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <div style="font-weight:800">Hourly</div>
+          <div id="hourContainer" class="hourGrid"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div style="font-weight:800">Recent searches</div>
+        <div id="history" class="history"></div>
+      </div>
+
+      <div class="footerNote">Data by <a href="https://wttr.in" target="_blank" rel="noopener">wttr.in</a> — no API key required.</div>
+    </div>
+
+    <!-- RIGHT: bigger display / details -->
+    <div class="card" id="detailCard">
+      <div id="detailTitle" style="font-weight:800; margin-bottom:6px;">Enter a city to begin</div>
+      <div id="detailBody" class="small" style="color:var(--muted)">You can use geolocation or search.</div>
+
+      <div id="extraDetails" style="margin-top:12px; display:none;">
+        <div style="font-weight:700; margin-bottom:8px;">Sun & Moon</div>
+        <div id="sunBlock" class="small" style="display:flex; gap:10px; flex-wrap:wrap;">
+          <div>Sunrise: <span id="sunrise">—</span></div>
+          <div>Sunset: <span id="sunset">—</span></div>
+          <div>Moon phase: <span id="moon">—</span></div>
+        </div>
+      </div>
+
+      <div id="rawJsonBlock" style="margin-top:12px; display:none;">
+        <div style="font-weight:700; margin-bottom:8px;">Raw JSON (debug)</div>
+        <pre id="rawJson" style="max-height:260px; overflow:auto; background:#f6fbff; padding:8px; border-radius:8px; border:1px solid #eef6ff;"></pre>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* Enhanced weather UI using wttr.in JSON endpoint
+   - GET https://wttr.in/<place>?format=j1
+   - For geolocation, uses navigator.geolocation to fetch lat,long and pass to wttr.in as "lat,lon"
+*/
+
+const cityInput = document.getElementById('cityInput');
+const searchBtn = document.getElementById('searchBtn');
+const geoBtn = document.getElementById('geoBtn');
+const loadingEl = document.getElementById('loading');
+const errorEl = document.getElementById('error');
+
+const currentBlock = document.getElementById('currentBlock');
+const condEmoji = document.getElementById('condEmoji');
+const tempNow = document.getElementById('tempNow');
+const condText = document.getElementById('condText');
+const locText = document.getElementById('locText');
+const timeText = document.getElementById('timeText');
+const feelsEl = document.getElementById('feels');
+const humEl = document.getElementById('hum');
+const windEl = document.getElementById('wind');
+const visEl = document.getElementById('vis');
+
+const forecastRow = document.getElementById('forecastRow');
+const hourContainer = document.getElementById('hourContainer');
+
+const historyEl = document.getElementById('history');
+
+const detailTitle = document.getElementById('detailTitle');
+const detailBody = document.getElementById('detailBody');
+const extraDetails = document.getElementById('extraDetails');
+const sunriseEl = document.getElementById('sunrise');
+const sunsetEl = document.getElementById('sunset');
+const moonEl = document.getElementById('moon');
+
+const rawJsonBlock = document.getElementById('rawJsonBlock');
+const rawJsonEl = document.getElementById('rawJson');
+
+const exportBtn = document.getElementById('exportBtn');
+const copyBtn = document.getElementById('copyBtn');
+
+let lastData = null;
+
+// minimal emoji mapping — uses condition text heuristics
+function condToEmoji(text){
+  const t = (text||'').toLowerCase();
+  if (t.includes('sun') || t.includes('clear')) return '☀️';
+  if (t.includes('partly') || t.includes('fair')) return '🌤';
+  if (t.includes('cloud') || t.includes('overcast')) return '☁️';
+  if (t.includes('rain') || t.includes('drizzle')) return '🌧️';
+  if (t.includes('shower')) return '🌦️';
+  if (t.includes('thunder')) return '⛈️';
+  if (t.includes('snow') || t.includes('sleet')) return '❄️';
+  if (t.includes('mist') || t.includes('fog') || t.includes('haze')) return '🌫️';
+  return '🌤';
+}
+
+function showLoading(yes=true){
+  loadingEl.style.display = yes ? 'block' : 'none';
+  errorEl.style.display = 'none';
+}
+
+function showError(msg){
+  loadingEl.style.display = 'none';
+  errorEl.style.display = 'block';
+  errorEl.textContent = msg;
+}
+
+// core fetch function
+async function fetchWeather(query){
+  // query can be city string or "lat,lon"
+  showLoading(true);
+  currentBlock.style.display = 'none';
+  extraDetails.style.display = 'none';
+  rawJsonBlock.style.display = 'none';
+  try {
+    // wttr.in json
+    const url = `https://wttr.in/${encodeURIComponent(query)}?format=j1`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Network response not ok');
+    const data = await res.json();
+    lastData = data;
+    renderData(data, query);
+    showLoading(false);
+    saveHistory(query);
+  } catch (err) {
+    showError('Could not fetch weather. Try another query.');
+    console.error(err);
+  }
+}
+
+// render
+function renderData(data, query){
+  // current_condition is array[0]
+  const cur = (data.current_condition && data.current_condition[0]) || null;
+  const nearest = (data.nearest_area && data.nearest_area[0]) || null;
+  const place = nearest ? (nearest.areaName && nearest.areaName[0].value) || query : query;
+  if (!cur) { showError('No current data'); return; }
+
+  currentBlock.style.display = 'block';
+  const tempC = cur.temp_C;
+  tempNow.textContent = `${tempC}°C`;
+  condText.textContent = cur.weatherDesc && cur.weatherDesc[0].value || '—';
+  condEmoji.textContent = condToEmoji(condText.textContent);
+  locText.textContent = `${place} • ${nearest && nearest.region ? nearest.region[0].value : ''}`;
+  timeText.textContent = `Local time: ${new Date().toLocaleTimeString()}`;
+
+  feelsEl.textContent = `${cur.FeelsLikeC}°C`;
+  humEl.textContent = `${cur.humidity}%`;
+  windEl.textContent = `${cur.windspeedKmph} km/h ${cur.winddir16Point || ''}`;
+  visEl.textContent = `${cur.visibility || '—'} km`;
+
+  // forecast days (data.weather)
+  const days = data.weather || [];
+  forecastRow.innerHTML = '';
+  days.slice(0,3).forEach((d, idx) => {
+    const dayCard = document.createElement('div');
+    dayCard.className = 'dayCard' + (idx===0 ? ' selected' : '');
+    dayCard.dataset.dayIndex = idx;
+    const dateLabel = idx === 0 ? 'Today' : (new Date(Date.now() + idx*86400000)).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    const maxT = d.maxtempC;
+    const minT = d.mintempC;
+    const avgT = d.avgtempC;
+    const chanceRain = (d.hourly && d.hourly.reduce((s,h)=> Math.max(s, Number(h.chanceofrain || 0)),0)) || 0;
+    const sunrise = d.astronomy && d.astronomy[0] && d.astronomy[0].sunrise ? d.astronomy[0].sunrise : '';
+    const sunset = d.astronomy && d.astronomy[0] && d.astronomy[0].sunset ? d.astronomy[0].sunset : '';
+
+    dayCard.innerHTML = `
+      <div style="font-weight:800">${dateLabel}</div>
+      <div style="margin-top:8px; font-size:28px; font-weight:700">${avgT}°C</div>
+      <div class="small" style="margin-top:6px;">${minT}° / ${maxT}°</div>
+      <div class="small" style="margin-top:6px;">🌧 ${chanceRain}% • ☀ ${sunrise} / ${sunset}</div>
+    `;
+    dayCard.addEventListener('click', () => {
+      document.querySelectorAll('.dayCard').forEach(c => c.classList.remove('selected'));
+      dayCard.classList.add('selected');
+      showHourlyForIndex(idx, days);
+    });
+    forecastRow.appendChild(dayCard);
+  });
+
+  // show hourly for first day by default
+  showHourlyForIndex(0, days);
+
+  // sun & moon (from astronomy of first day)
+  if (days[0] && days[0].astronomy && days[0].astronomy[0]) {
+    const astro = days[0].astronomy[0];
+    sunriseEl.textContent = astro.sunrise || '—';
+    sunsetEl.textContent = astro.sunset || '—';
+    moonEl.textContent = astro.moon_phase || '—';
+    extraDetails.style.display = 'block';
+  } else {
+    extraDetails.style.display = 'none';
+  }
+
+  detailTitle.textContent = `${place} — ${condText.textContent}, ${tempC}°C`;
+  detailBody.textContent = `${cur.weatherDesc && cur.weatherDesc[0].value || ''}. Feels like ${cur.FeelsLikeC}°C.`;
+  rawJsonBlock.style.display = 'none';
+  // store lastData for export
+}
+
+// show hourly list for day index
+function showHourlyForIndex(idx, days){
+  hourContainer.innerHTML = '';
+  const day = days[idx];
+  if (!day || !day.hourly) {
+    hourContainer.innerHTML = '<div class="small">No hourly data</div>';
+    return;
+  }
+  day.hourly.forEach(h=>{
+    // wttr.hr has time like "0","300","600"... in 24h, but often includes "chanceofrain" etc
+    const timeStr = h.time ? (String(h.time).padStart(4,'0').replace(/^0(\d{1,2})$/, '$1')) : '';
+    const temp = h.tempC;
+    const desc = h.weatherDesc && h.weatherDesc[0] && h.weatherDesc[0].value ? h.weatherDesc[0].value : '';
+    const pop = h.chanceofrain || h.chanceofshowers || h.chanceofsnow || '0';
+    const windK = h.windspeedKmph;
+    const card = document.createElement('div');
+    card.className = 'hourCard';
+    card.innerHTML = `<div style="font-weight:800">${timeStr || '—'}</div>
+                      <div style="margin-top:6px; font-weight:700">${temp}°C</div>
+                      <div class="small" style="margin-top:6px;">${condToEmoji(desc)} ${desc}</div>
+                      <div class="small" style="margin-top:6px;">🌧 ${pop}% • 💨 ${windK} km/h</div>`;
+    hourContainer.appendChild(card);
+  });
+}
+
+// history persistence (simple list of recent queries)
+const HISTORY_KEY = 'weather_search_history_v1';
+function loadHistory(){
+  const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  renderHistory(h);
+}
+function saveHistory(q){
+  if (!q) return;
+  let h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  // avoid duplicates (case-insensitive)
+  q = q.trim();
+  h = h.filter(x => x.toLowerCase() !== q.toLowerCase());
+  h.unshift(q);
+  if (h.length > 8) h.pop();
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+  renderHistory(h);
+}
+function renderHistory(list){
+  historyEl.innerHTML = '';
+  (list || []).forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'histItem';
+    el.textContent = item;
+    el.addEventListener('click', () => { cityInput.value = item; fetchWeather(item); });
+    historyEl.appendChild(el);
+  });
+}
+
+// copy summary to clipboard
+copyBtn.addEventListener('click', async () => {
+  if (!lastData) { alert('No data to copy'); return; }
+  const cur = lastData.current_condition[0];
+  const nearest = lastData.nearest_area && lastData.nearest_area[0];
+  const place = nearest ? (nearest.areaName && nearest.areaName[0].value) : cityInput.value;
+  const summary = `${place}: ${cur.weatherDesc[0].value}, ${cur.temp_C}°C (feels ${cur.FeelsLikeC}°C).`;
+  try {
+    await navigator.clipboard.writeText(summary);
+    alert('Summary copied to clipboard');
+  } catch {
+    alert('Copy failed');
+  }
+});
+
+// export last JSON
+exportBtn.addEventListener('click', () => {
+  if (!lastData) { alert('No data to export'); return; }
+  const blob = new Blob([JSON.stringify(lastData, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'weather.json'; a.click();
+});
+
+// geolocation
+geoBtn.addEventListener('click', () => {
+  if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const lat = pos.coords.latitude.toFixed(4);
+    const lon = pos.coords.longitude.toFixed(4);
+    fetchWeather(`${lat},${lon}`);
+  }, err => {
+    alert('Geolocation denied or unavailable');
+  }, { timeout: 10000 });
+});
+
+// search
+searchBtn.addEventListener('click', () => {
+  const q = cityInput.value.trim();
+  if (!q) { alert('Enter a city'); return; }
+  fetchWeather(q);
+});
+cityInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') searchBtn.click(); });
+
+// small helpers & init
+function condToEmoji(text){
+  const t = (text||'').toLowerCase();
+  if (t.includes('sun') || t.includes('clear')) return '☀️';
+  if (t.includes('partly') || t.includes('fair')) return '🌤';
+  if (t.includes('cloud') || t.includes('overcast')) return '☁️';
+  if (t.includes('rain') || t.includes('drizzle')) return '🌧️';
+  if (t.includes('shower')) return '🌦️';
+  if (t.includes('thunder')) return '⛈️';
+  if (t.includes('snow') || t.includes('sleet')) return '❄️';
+  if (t.includes('mist') || t.includes('fog') || t.includes('haze')) return '🌫️';
+  return '🌤';
+}
+
+function init(){
+  loadHistory();
+  // optional: load last searched
+  const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  if (hist && hist.length) {
+    cityInput.value = hist[0];
+    fetchWeather(hist[0]);
+  }
+}
+
+init();
+</script>
+</body>
+</html>

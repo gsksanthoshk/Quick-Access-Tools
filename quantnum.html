@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>QuantumCalc — Advanced</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#0f1724; --accent:#06b6d4; --accent2:#7c3aed; --muted:#9aa6b2;
+    --glass: rgba(255,255,255,0.03);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; font-family:Inter,ui-sans-serif,system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    display:flex; gap:20px; align-items:flex-start; justify-content:center; padding:32px;
+    background:linear-gradient(180deg,#07122a 0%, #071a2f 100%);
+    color:#e6eef8;
+  }
+
+  .calc {
+    width:360px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:14px; padding:16px; border:1px solid rgba(255,255,255,0.04);
+    box-shadow: 0 12px 40px rgba(2,6,23,0.6);
+  }
+
+  header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; }
+  header h1 { margin:0; font-size:18px; letter-spacing:0.2px; }
+  header .sub { color:var(--muted); font-size:12px; }
+
+  .display {
+    background: rgba(255,255,255,0.02); border-radius:10px; padding:12px; margin-bottom:12px; border:1px solid rgba(255,255,255,0.03);
+  }
+  #expr { width:100%; border:none; background:transparent; color: #dff6ff; font-size:20px; outline:none; }
+  #result { width:100%; text-align:right; margin-top:6px; color:#bfeefc; font-size:20px; font-weight:700; }
+
+  .kbd { display:grid; grid-template-columns: repeat(6,1fr); gap:8px; }
+  button.key {
+    padding:10px; border-radius:8px; border:none; cursor:pointer; font-weight:700; color:#071022;
+    background:linear-gradient(90deg,var(--accent),var(--accent2)); box-shadow: 0 8px 18px rgba(3,105,255,0.06);
+  }
+  button.func { background: rgba(255,255,255,0.04); color:#dff6ff; font-weight:700; border:1px solid rgba(255,255,255,0.02); }
+  button.op { background: linear-gradient(90deg,#f97316,#f43f5e); color:white; }
+
+  .row { display:flex; gap:8px; margin-bottom:8px; }
+  .small { font-size:12px; color:var(--muted); }
+
+  .history {
+    width:320px; max-height:600px; overflow:auto; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:12px; padding:12px; border:1px solid rgba(255,255,255,0.04);
+  }
+  .history h3 { margin:0 0 8px 0; font-size:14px; }
+  .historyList { display:flex; flex-direction:column; gap:8px; }
+  .histItem { background: rgba(255,255,255,0.02); padding:8px; border-radius:8px; font-size:13px; display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .histItem .exp { color:#cfeefc; }
+  .histItem .val { color:#9ff0ff; font-weight:700; }
+
+  .controls { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .ghost { background:transparent; border:1px solid rgba(255,255,255,0.04); color:var(--muted); padding:8px 10px; border-radius:8px; cursor:pointer; }
+  .primary { background:linear-gradient(90deg,var(--accent),var(--accent2)); color:#071022; padding:8px 10px; border-radius:8px; border:none; cursor:pointer; font-weight:700; }
+
+  footer.small { margin-top:12px; color:var(--muted); font-size:12px; text-align:center; }
+
+  @media (max-width:880px){
+    body{padding:18px;flex-direction:column;align-items:center}
+  }
+</style>
+</head>
+<body>
+
+  <div class="calc" role="application" aria-label="Quantum Calculator">
+    <header>
+      <div>
+        <h1>QuantumCalc Pro</h1>
+        <div class="sub">Scientific | Memory | History | Export</div>
+      </div>
+      <div class="small">Press Enter to evaluate</div>
+    </header>
+
+    <div class="display" aria-live="polite">
+      <input id="expr" placeholder="Enter expression (e.g. 2*sin(π/6)+3^2)" autocomplete="off" spellcheck="false" />
+      <div id="result">—</div>
+    </div>
+
+    <!-- keypad (grouped) -->
+    <div class="kbd" aria-hidden="false">
+      <button class="func" data-insert="sin(">sin</button>
+      <button class="func" data-insert="cos(">cos</button>
+      <button class="func" data-insert="tan(">tan</button>
+      <button class="func" data-insert="ln(">ln</button>
+      <button class="func" data-insert="log10(">log</button>
+      <button class="func" id="pi">π</button>
+
+      <button class="func" data-insert="sqrt(">√</button>
+      <button class="func" data-insert="(">(</button>
+      <button class="func" data-insert=")">)</button>
+      <button class="func" data-insert="^">^</button>
+      <button class="func" id="fact">n!</button>
+      <button class="func" id="e">e</button>
+
+      <button class="key" data-insert="7">7</button>
+      <button class="key" data-insert="8">8</button>
+      <button class="key" data-insert="9">9</button>
+      <button class="op" data-insert="/">÷</button>
+      <button class="func" data-insert="%">%</button>
+      <button class="ghost" id="mc">MC</button>
+
+      <button class="key" data-insert="4">4</button>
+      <button class="key" data-insert="5">5</button>
+      <button class="key" data-insert="6">6</button>
+      <button class="op" data-insert="*">×</button>
+      <button class="func" data-insert="sqrt(">√</button>
+      <button class="ghost" id="mr">MR</button>
+
+      <button class="key" data-insert="1">1</button>
+      <button class="key" data-insert="2">2</button>
+      <button class="key" data-insert="3">3</button>
+      <button class="op" data-insert="-">−</button>
+      <button class="func" id="pm">±</button>
+      <button class="ghost" id="mplus">M+</button>
+
+      <button class="key" data-insert="0">0</button>
+      <button class="key" data-insert=".">.</button>
+      <button class="key" data-insert="(">(</button>
+      <button class="op" data-insert="+">+</button>
+      <button class="key" id="del">DEL</button>
+      <button class="ghost" id="mminus">M-</button>
+
+      <button class="ghost" id="ac" style="grid-column:span 3;">AC</button>
+      <button class="primary" id="equals" style="grid-column:span 3;">=</button>
+    </div>
+
+    <div class="controls" role="toolbar" aria-label="Additional controls">
+      <button class="ghost" id="copy">Copy Result</button>
+      <button class="ghost" id="export">Export History</button>
+      <button class="ghost" id="clearHist">Clear History</button>
+    </div>
+
+    <footer class="small">Supports functions: sin, cos, tan, asin, acos, atan, ln (natural), log (base10), sqrt, ^, ! and %</footer>
+  </div>
+
+  <aside class="history" aria-label="Calculation history">
+    <h3>History</h3>
+    <div class="historyList" id="historyList"></div>
+  </aside>
+
+<script>
+/* Advanced QuantumCalc JS
+   - Evaluate mathematical expressions with functions and operators.
+   - Memory, history, export, copy.
+   - Not a sandboxed JS engine; intended for local use. Avoid evaluating untrusted code.
+*/
+
+const exprEl = document.getElementById('expr');
+const resultEl = document.getElementById('result');
+const historyList = document.getElementById('historyList');
+
+const HISTORY_KEY = 'qc_history_v2';
+const MEMORY_KEY = 'qc_memory_v2';
+let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+let memory = Number(localStorage.getItem(MEMORY_KEY) || '0');
+
+function saveHistory(){ localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); }
+function saveMemory(){ localStorage.setItem(MEMORY_KEY, String(memory)); }
+
+/* --- Utilities --- */
+function factorial(n) {
+  if (n < 0 || !Number.isInteger(n)) throw new Error('Factorial only for non-negative integers');
+  if (n > 170) throw new Error('Number too large for factorial');
+  let r = 1;
+  for (let i = 2; i <= n; i++) r *= i;
+  return r;
+}
+
+/* sanitize and transform expression into valid JS */
+function transformExpression(input) {
+  if (!input || !input.trim()) throw new Error('Empty expression');
+
+  let s = input;
+
+  // replace unicode operators
+  s = s.replace(/÷/g, '/').replace(/×/g, '*').replace(/−/g, '-').replace(/π/g, '(Math.PI)').replace(/\be\b/g, '(Math.E)');
+
+  // allow 'ln' => Math.log, 'log10' or 'log' => Math.log10
+  s = s.replace(/\bln\(/g, 'Math.log(');
+  s = s.replace(/\blog10\(/g, 'Math.log10(');
+  s = s.replace(/\blog\(/g, 'Math.log10(');
+
+  // functions: sin, cos, tan, asin, acos, atan, sqrt
+  s = s.replace(/\bsin\(/g, 'Math.sin(');
+  s = s.replace(/\bcos\(/g, 'Math.cos(');
+  s = s.replace(/\btan\(/g, 'Math.tan(');
+  s = s.replace(/\basin\(/g, 'Math.asin(');
+  s = s.replace(/\bacos\(/g, 'Math.acos(');
+  s = s.replace(/\batan\(/g, 'Math.atan(');
+  s = s.replace(/\bsqrt\(/g, 'Math.sqrt(');
+
+  // caret ^ to ** operator
+  s = s.replace(/\^/g, '**');
+
+  // percent: 50% -> (50/100)
+  s = s.replace(/(\d+(\.\d+)?)%/g, '($1/100)');
+
+  // factorial: replace occurrences like (expr)! or number! using function call
+  // We will process factorials with regex repeatedly (right-to-left)
+  // pattern: (number)! or (parenthesized expression)!
+  // To support e.g. (3+2)! we will evaluate inner expression later by wrapping a call to __fact(function)
+  // Simpler approach: replace "N!" where N is integer with factorial(N) inline where possible.
+  // For non-integer or expressions like (3+2)! we convert to factorial((3+2)) and let factorial check during evaluation.
+  s = s.replace(/([0-9]+(\.[0-9]+)?)!/g, '(__fact($1))');
+  // parenthesis factorials: ( ... )!
+  s = s.replace(/\(([^()]+)\)!/g, '(__fact(($1)))');
+
+  // limit any characters to allowed set to reduce injection risk (digits, operators, letters, parentheses, dots, commas, spaces)
+  // We'll allow letters for Math.* and __fact, commas for function args, percent handled already
+  if (/[^0-9+\-*/%^()., a-zA-Z_]/.test(s)) {
+    // contains suspicious characters — but allow, just remove null bytes
+    // throw new Error('Invalid characters in expression');
+  }
+
+  return s;
+}
+
+/* evaluate expression using Function, with __fact helper and Math available */
+function evaluate(input) {
+  const transformed = transformExpression(input);
+  // Build a safe-ish function body
+  const body = `
+    const __fact = function(x){
+      const n = Number(x);
+      if (!Number.isFinite(n)) throw new Error('Invalid factorial input');
+      // integer check
+      if (Math.round(n) !== n) throw new Error('Factorial requires integer');
+      if (n < 0) throw new Error('Factorial requires non-negative integer');
+      if (n > 170) throw new Error('Factorial too large');
+      let res = 1;
+      for (let i=2;i<=n;i++) res *= i;
+      return res;
+    };
+    return (${transformed});
+  `;
+  // Use Function constructor to evaluate in isolated function scope (Math is global but referenced explicitly)
+  try {
+    const fn = new Function(body);
+    const val = fn();
+    if (typeof val === 'number' && !isFinite(val)) throw new Error('Result is not finite');
+    return val;
+  } catch (err) {
+    // bubble up
+    throw err;
+  }
+}
+
+/* --- UI / History / Memory --- */
+function refreshHistoryUI(){
+  historyList.innerHTML = '';
+  for (let i = history.length - 1; i >= 0; i--) {
+    const item = history[i];
+    const el = document.createElement('div');
+    el.className = 'histItem';
+    el.innerHTML = `<div class="exp">${escapeHtml(item.expr)}</div><div class="val">${escapeHtml(String(item.value))}</div>`;
+    el.addEventListener('click', () => {
+      exprEl.value = item.expr;
+      exprEl.focus();
+    });
+    historyList.appendChild(el);
+  }
+}
+
+function recordHistory(expr, val){
+  history.push({ expr, value: val, ts: Date.now() });
+  // keep up to 200
+  if (history.length > 200) history.shift();
+  saveHistory();
+  refreshHistoryUI();
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* --- Button handlers & keyboard --- */
+document.querySelectorAll('[data-insert]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const txt = btn.getAttribute('data-insert');
+    insertAtCursor(txt);
+    exprEl.focus();
+  });
+});
+
+document.getElementById('pi').addEventListener('click', () => insertAtCursor('π'));
+document.getElementById('e').addEventListener('click', () => insertAtCursor('e'));
+document.getElementById('fact').addEventListener('click', () => insertAtCursor('!'));
+
+document.getElementById('ac').addEventListener('click', () => { exprEl.value=''; resultEl.textContent='—'; exprEl.focus(); });
+document.getElementById('del').addEventListener('click', () => { deleteAtCursor(); });
+
+document.getElementById('equals').addEventListener('click', doEvaluate);
+exprEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); doEvaluate(); }
+  if (e.key === 'Tab') { e.preventDefault(); insertAtCursor('    '); }
+  if (e.key === 'Escape') { exprEl.value=''; resultEl.textContent='—'; }
+  if (e.key === 'Backspace') { /* default behavior OK */ }
+});
+
+// memory
+document.getElementById('mc').addEventListener('click', () => { memory = 0; saveMemory(); toast('Memory cleared'); });
+document.getElementById('mr').addEventListener('click', () => { insertAtCursor(String(memory)); });
+document.getElementById('mplus').addEventListener('click', () => { try { const v = Number(evaluate(exprEl.value)); if (!isNaN(v)) { memory += v; saveMemory(); toast('Added to memory'); } } catch (e) { toast('Invalid expr'); } });
+document.getElementById('mminus').addEventListener('click', () => { try { const v = Number(evaluate(exprEl.value)); if (!isNaN(v)) { memory -= v; saveMemory(); toast('Subtracted from memory'); } } catch (e) { toast('Invalid expr'); } });
+
+// copy, export, clear history
+document.getElementById('copy').addEventListener('click', async () => {
+  try {
+    const txt = resultEl.textContent;
+    await navigator.clipboard.writeText(txt);
+    toast('Result copied');
+  } catch {
+    toast('Copy failed');
+  }
+});
+document.getElementById('export').addEventListener('click', () => {
+  if (!history.length) { toast('No history'); return; }
+  let csv = 'Expression,Result,Timestamp\n';
+  for (const h of history) csv += `"${h.expr.replace(/"/g,'""')}","${String(h.value).replace(/"/g,'""')}","${new Date(h.ts).toISOString()}"\n`;
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'quantumcalc-history.csv';
+  a.click();
+  toast('Export started');
+});
+document.getElementById('clearHist').addEventListener('click', () => {
+  if (!confirm('Clear history?')) return;
+  history = [];
+  saveHistory();
+  refreshHistoryUI();
+  toast('History cleared');
+});
+
+/* keyboard global shortcuts */
+window.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key.toLowerCase() === 'l') { e.preventDefault(); exprEl.focus(); exprEl.select(); }
+  if (e.ctrlKey && e.key.toLowerCase() === 'h') { e.preventDefault(); alert('History count: ' + history.length); }
+});
+
+/* evaluate function wrapper */
+function doEvaluate() {
+  const expr = exprEl.value.trim();
+  if (!expr) { resultEl.textContent = '—'; return; }
+  try {
+    const val = evaluate(expr);
+    resultEl.textContent = String(val);
+    recordHistory(expr, val);
+  } catch (err) {
+    resultEl.textContent = 'Error: ' + (err.message || 'Invalid');
+  }
+}
+
+/* basic insert/delete helpers for input */
+function insertAtCursor(text) {
+  const el = exprEl;
+  const start = el.selectionStart || 0;
+  const end = el.selectionEnd || 0;
+  const v = el.value;
+  el.value = v.slice(0, start) + text + v.slice(end);
+  const pos = start + text.length;
+  el.setSelectionRange(pos, pos);
+  el.focus();
+}
+
+function deleteAtCursor() {
+  const el = exprEl;
+  const start = el.selectionStart || 0;
+  const end = el.selectionEnd || 0;
+  if (start === end && start > 0) {
+    el.value = el.value.slice(0, start - 1) + el.value.slice(end);
+    el.setSelectionRange(start - 1, start - 1);
+  } else {
+    el.value = el.value.slice(0, start) + el.value.slice(end);
+    el.setSelectionRange(start, start);
+  }
+  el.focus();
+}
+
+/* tiny toast */ 
+function toast(msg) {
+  const t = document.createElement('div');
+  t.style.position = 'fixed'; t.style.right = '18px'; t.style.bottom = '18px';
+  t.style.background = 'linear-gradient(90deg,var(--accent),var(--accent2))';
+  t.style.color = '#071022'; t.style.padding = '10px 12px'; t.style.borderRadius = '8px';
+  t.style.fontWeight = '700'; t.style.zIndex = 9999;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0.05'; t.style.transform = 'translateY(6px)'; }, 1400);
+  setTimeout(() => t.remove(), 1800);
+}
+
+/* initialize UI */
+function init() {
+  refreshHistoryUI();
+  saveMemory(); // ensure key exists
+  // show memory quick indicator in title (optional)
+  if (memory !== 0) toast('Memory: ' + memory);
+  exprEl.focus();
+}
+init();
+
+</script>
+</body>
+</html>

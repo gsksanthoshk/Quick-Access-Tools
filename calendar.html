@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Calendar — Enhanced</title>
+  <style>
+    :root{
+      --accent:#0b74ff;
+      --muted:#6b7280;
+      --bg:#f7fafc;
+      --card:#ffffff;
+      --success:#16a34a;
+      --danger:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,Segoe UI,Roboto,Arial; background:var(--bg); margin:0; padding:20px; display:flex; justify-content:center;}
+    .wrap{ width:100%; max-width:980px; }
+    .top { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap;}
+    .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:var(--card); padding:12px; border-radius:10px; box-shadow:0 6px 18px rgba(2,6,23,0.06); }
+    select,input[type=search]{ padding:8px 10px; border-radius:8px; border:1px solid #e6eef8; background:transparent; }
+    button{ padding:8px 10px; border-radius:8px; border:none; background:var(--accent); color:white; cursor:pointer; font-weight:700; }
+    button.ghost{ background:transparent; color:var(--accent); border:1px solid rgba(11,116,255,0.12); }
+    button.warn{ background:var(--danger); }
+    button.success{ background:var(--success); }
+    .card { background:var(--card); padding:14px; border-radius:10px; box-shadow:0 6px 20px rgba(2,6,23,0.06); }
+
+    #monthYear { margin-top:12px; font-weight:800; color:var(--accent); text-align:center; font-size:1.05rem; }
+    #calendarGrid { margin-top:12px; display:grid; grid-template-columns: repeat(7,1fr); gap:10px; justify-items:center; align-items:start; }
+    .dow { font-weight:800; color:var(--accent); text-align:center; }
+    .day { width:56px; min-height:56px; display:flex; flex-direction:column; gap:6px; align-items:center; justify-content:flex-start; padding:8px; border-radius:10px; background:#f1f5f9; color:#111; cursor:pointer; position:relative; }
+    .day.empty{ background:transparent; cursor:default; }
+    .day .num { font-weight:800; }
+    .day.today { background: linear-gradient(90deg,#e6f2ff,var(--card)); border:2px solid rgba(11,116,255,0.12); box-shadow:0 8px 20px rgba(11,116,255,0.06); }
+    .day.present { border-left:6px solid var(--success); }
+    .day.holiday { border-left:6px solid var(--danger); background: linear-gradient(90deg,#fff5f5,#fff); }
+
+    .event-dot { width:8px; height:8px; border-radius:50%; margin-top:6px; }
+    .event-dot.small{ width:6px; height:6px; }
+
+    .sidebar { margin-left:14px; width:320px; min-width:220px; }
+    .layout { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; }
+    .eventsList { max-height:360px; overflow:auto; margin-top:8px; display:flex; flex-direction:column; gap:8px; }
+    .eventItem { padding:8px; border-radius:8px; background:linear-gradient(180deg,#ffffff,#fbfdff); border:1px solid rgba(2,6,23,0.04); display:flex; justify-content:space-between; gap:8px; align-items:center; }
+    .eventItem .meta { font-size:13px; color:var(--muted); }
+
+    .searchWrap { display:flex; gap:8px; align-items:center; }
+    .small { font-size:13px; color:var(--muted); }
+
+    /* modal */
+    .modalBack { position:fixed; inset:0; display:none; background:rgba(2,6,23,0.45); align-items:center; justify-content:center; z-index:999; }
+    .modal { background:var(--card); padding:16px; border-radius:10px; width:360px; box-shadow:0 12px 40px rgba(2,6,23,0.5); }
+    .modal.show{ display:flex; }
+
+    .flex { display:flex; gap:8px; align-items:center; }
+
+    /* responsive */
+    @media (max-width:920px){
+      .layout{ flex-direction:column; }
+      .sidebar{ width:100%; }
+      .day{ width:44px; min-height:44px; padding:6px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="controls card" role="toolbar" aria-label="Calendar controls">
+        <button id="prevBtn" title="Previous month">◀ Prev</button>
+        <button id="todayBtn" title="Jump to today">Today</button>
+        <button id="nextBtn" title="Next month">Next ▶</button>
+
+        <div style="width:1px; background:#eef2f6; height:28px; margin:0 6px;"></div>
+
+        <label class="small">Month:
+          <select id="monthSelect" aria-label="Select month"></select>
+        </label>
+        <label class="small">Year:
+          <select id="yearSelect" aria-label="Select year"></select>
+        </label>
+
+        <div style="width:1px; background:#eef2f6; height:28px; margin:0 6px;"></div>
+
+        <div class="searchWrap">
+          <input id="search" type="search" placeholder="Search events..." />
+          <button class="ghost" id="searchBtn">🔍</button>
+        </div>
+
+        <button class="ghost" id="exportBtn" title="Export events">Export CSV</button>
+        <button class="ghost" id="importBtn" title="Import events">Import</button>
+      </div>
+
+      <div style="margin-left:auto;" class="small">Tip: Click a date to add/view events • Press <b>n</b> to add event for selected date</div>
+    </div>
+
+    <div class="layout">
+      <div style="flex:1;">
+        <div class="card">
+          <div id="monthYear"></div>
+          <div id="calendarGrid" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <aside class="sidebar">
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-weight:800">Selected date</div>
+              <div id="selDate" class="small">—</div>
+            </div>
+            <div>
+              <button id="addEventBtn" class="ghost">+ Add</button>
+              <button id="toggleHoliday" class="ghost" title="Mark/Unmark holiday">🏖</button>
+            </div>
+          </div>
+
+          <div style="margin-top:10px;">
+            <div style="font-weight:700">Events</div>
+            <div id="eventsList" class="eventsList small"></div>
+            <div id="noEvents" class="small" style="margin-top:8px;">No events — click a date to add one.</div>
+          </div>
+        </div>
+
+        <div style="height:12px;"></div>
+
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:800">Legend</div>
+            <div class="small">Weekends highlighted</div>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:10px; align-items:center;">
+            <div style="width:14px;height:14px;border-radius:4px;background:#f1f5f9;border:1px solid #e6eef8;"></div><div class="small">Normal</div>
+            <div style="width:14px;height:14px;border-radius:4px;background:linear-gradient(90deg,#fff5f5,#fff);border-left:6px solid var(--danger);"></div><div class="small">Holiday</div>
+            <div style="width:14px;height:14px;border-radius:4px;background:linear-gradient(90deg,#e6fff0,#fff);border-left:6px solid var(--success);"></div><div class="small">Marked</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Modal: add/edit event -->
+  <div id="modalBack" class="modalBack" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div style="font-weight:800; margin-bottom:8px;">Add / Edit Event</div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <input id="evtTitle" placeholder="Title" />
+        <textarea id="evtNotes" rows="4" placeholder="Notes / details"></textarea>
+        <div style="display:flex; gap:8px;">
+          <input id="evtTime" type="time" />
+          <select id="evtColor">
+            <option value="#0b74ff">Blue</option>
+            <option value="#16a34a">Green</option>
+            <option value="#f97316">Orange</option>
+            <option value="#ef4444">Red</option>
+            <option value="#6b7280">Gray</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
+          <button id="evtCancel" class="ghost">Cancel</button>
+          <button id="evtSave" class="success">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* Enhanced Calendar with per-day events saved in localStorage.
+   - events keyed by date string 'YYYY-MM-DD'
+   - supports export/import CSV
+   - per-user storage if localStorage.loggedInUser exists (key: calendar::<user>)
+*/
+
+const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+let viewDate = new Date(); // showing month
+let selectedDate = null;   // Date object
+const LOCALE = navigator.language || 'en-US';
+const USER = localStorage.getItem('loggedInUser') || 'guest';
+const STORAGE_KEY = `calendar_events::${USER}`;
+
+// load events map: { '2025-11-07': [{id,title,notes,time,color}] }
+let eventsMap = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+
+// helper: format YYYY-MM-DD
+function fmtDate(d){
+  const y = d.getFullYear(); const m = String(d.getMonth()+1).padStart(2,'0'); const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function humanDate(d){
+  return `${monthNames[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+// populate month/year selects
+function populateSelectors(){
+  const ms = document.getElementById('monthSelect');
+  const ys = document.getElementById('yearSelect');
+  ms.innerHTML = monthNames.map((m,i)=>`<option value="${i}">${m}</option>`).join('');
+  const year = viewDate.getFullYear();
+  let years = '';
+  for(let y=year-5;y<=year+5;y++) years += `<option value="${y}">${y}</option>`;
+  ys.innerHTML = years;
+  ms.value = viewDate.getMonth();
+  ys.value = viewDate.getFullYear();
+}
+
+// render calendar grid
+function renderCalendar(date = new Date()){
+  viewDate = new Date(date.getFullYear(), date.getMonth(), 1);
+  document.getElementById('monthYear').textContent = `${monthNames[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
+  populateSelectors();
+
+  const grid = document.getElementById('calendarGrid');
+  grid.innerHTML = '';
+
+  // weekday headers
+  const daysOfWeek = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  for (let d of daysOfWeek){
+    const el = document.createElement('div'); el.className='dow'; el.textContent = d; grid.appendChild(el);
+  }
+
+  const firstDayIndex = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay();
+  const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 0).getDate();
+
+  // empty slots
+  for (let i=0;i<firstDayIndex;i++){
+    const empty = document.createElement('div'); empty.className='day empty'; grid.appendChild(empty);
+  }
+
+  const today = new Date();
+  for (let d=1; d<=daysInMonth; d++){
+    const dt = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
+    const el = document.createElement('div');
+    el.className='day';
+    if (dt.toDateString() === today.toDateString()) el.classList.add('today');
+
+    const dateNum = document.createElement('div'); dateNum.className='num'; dateNum.textContent = d; el.appendChild(dateNum);
+
+    // show up to 3 event dots
+    const key = fmtDate(dt);
+    const evs = eventsMap[key] || [];
+    const dotsWrap = document.createElement('div'); dotsWrap.style.display='flex'; dotsWrap.style.gap='6px'; dotsWrap.style.marginTop='6px';
+    evs.slice(0,3).forEach(ev => {
+      const dot = document.createElement('div'); dot.className='event-dot small'; dot.style.background = ev.color || '#0b74ff';
+      dotsWrap.appendChild(dot);
+    });
+    el.appendChild(dotsWrap);
+
+    // mark holiday if any event flagged as holiday (we'll use a simple flag: title === '__HOLIDAY__')
+    if (evs.some(e=>e._holiday)) el.classList.add('holiday');
+    else if (evs.some(e=>e._marked)) el.classList.add('present');
+
+    // click handler: select date & open event list
+    el.addEventListener('click', () => {
+      selectDate(dt);
+    });
+
+    // keyboard support
+    el.tabIndex = 0;
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') selectDate(dt); });
+
+    grid.appendChild(el);
+  }
+  // clear selected date if month changed
+  if (!selectedDate || selectedDate.getMonth() !== viewDate.getMonth() || selectedDate.getFullYear() !== viewDate.getFullYear()) {
+    selectedDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+  }
+  updateSidebar();
+}
+
+// select a date
+function selectDate(dt){
+  selectedDate = dt;
+  updateSidebar();
+  // optional: auto-open add modal?
+}
+
+// update sidebar showing selected date and events
+function updateSidebar(){
+  const sel = document.getElementById('selDate');
+  if (!selectedDate) { sel.textContent = '—'; document.getElementById('eventsList').innerHTML = ''; return; }
+  sel.textContent = humanDate(selectedDate);
+  const key = fmtDate(selectedDate);
+  const list = eventsMap[key] || [];
+  const elList = document.getElementById('eventsList');
+  elList.innerHTML = '';
+  if (!list.length) {
+    document.getElementById('noEvents').style.display = 'block';
+  } else {
+    document.getElementById('noEvents').style.display = 'none';
+    list.forEach(ev => {
+      const row = document.createElement('div'); row.className='eventItem';
+      const left = document.createElement('div');
+      left.innerHTML = `<div style="font-weight:700">${escapeHTML(ev.title)}</div><div class="meta">${ev.time ? ev.time + ' • ' : ''}${escapeHTML(ev.notes || '')}</div>`;
+      const right = document.createElement('div'); right.style.display='flex'; right.style.flexDirection='column'; right.style.gap='6px';
+      const editBtn = document.createElement('button'); editBtn.className='ghost'; editBtn.textContent='Edit';
+      editBtn.addEventListener('click', () => openEditModal(key, ev.id));
+      const delBtn = document.createElement('button'); delBtn.className='ghost'; delBtn.textContent='Delete';
+      delBtn.addEventListener('click', () => deleteEvent(key, ev.id));
+      right.appendChild(editBtn); right.appendChild(delBtn);
+      row.appendChild(left); row.appendChild(right);
+      elList.appendChild(row);
+    });
+  }
+}
+
+// add/edit events modal
+const modalBack = document.getElementById('modalBack');
+const evtTitle = document.getElementById('evtTitle');
+const evtNotes = document.getElementById('evtNotes');
+const evtTime = document.getElementById('evtTime');
+const evtColor = document.getElementById('evtColor');
+let editing = null; // {key,id} or null
+
+function openAddModal(){
+  if (!selectedDate) selectedDate = new Date();
+  editing = null;
+  evtTitle.value=''; evtNotes.value=''; evtTime.value=''; evtColor.value='#0b74ff';
+  modalBack.classList.add('show'); modalBack.style.display = 'flex';
+  document.getElementById('evtTitle').focus();
+}
+function openEditModal(key,id){
+  const list = eventsMap[key] || [];
+  const ev = list.find(x=>x.id===id);
+  if (!ev) return;
+  editing = { key, id };
+  evtTitle.value = ev.title || '';
+  evtNotes.value = ev.notes || '';
+  evtTime.value = ev.time || '';
+  evtColor.value = ev.color || '#0b74ff';
+  modalBack.classList.add('show'); modalBack.style.display = 'flex';
+  evtTitle.focus();
+}
+function closeModal(){ modalBack.classList.remove('show'); modalBack.style.display = 'none'; editing = null; }
+document.getElementById('evtCancel').addEventListener('click', closeModal);
+
+document.getElementById('evtSave').addEventListener('click', () => {
+  const title = evtTitle.value.trim();
+  if (!title) { alert('Please enter a title'); evtTitle.focus(); return; }
+  const notes = evtNotes.value.trim();
+  const time = evtTime.value;
+  const color = evtColor.value;
+  const key = fmtDate(selectedDate || new Date());
+  if (!eventsMap[key]) eventsMap[key] = [];
+  if (editing) {
+    // update
+    const list = eventsMap[editing.key];
+    const idx = list.findIndex(x=>x.id===editing.id);
+    if (idx>=0) { list[idx].title = title; list[idx].notes = notes; list[idx].time = time; list[idx].color = color; }
+  } else {
+    const id = 'ev_' + Date.now() + '_' + Math.floor(Math.random()*9999);
+    eventsMap[key].push({ id, title, notes, time, color });
+  }
+  persist();
+  closeModal();
+  renderCalendar(viewDate);
+  updateSidebar();
+});
+
+// delete event
+function deleteEvent(key,id){
+  if (!confirm('Delete event?')) return;
+  eventsMap[key] = (eventsMap[key] || []).filter(x=>x.id!==id);
+  if (!eventsMap[key].length) delete eventsMap[key];
+  persist();
+  renderCalendar(viewDate);
+  updateSidebar();
+}
+
+// mark/unmark holiday for selected date (we use _holiday flag inside event)
+document.getElementById('toggleHoliday').addEventListener('click', () => {
+  if (!selectedDate) { alert('Select a date first'); return; }
+  const key = fmtDate(selectedDate);
+  const list = eventsMap[key] || [];
+  // toggle: if any _holiday, remove them; else add special holiday pseudo-event
+  if (list.some(e=>e._holiday)) {
+    eventsMap[key] = list.filter(e=>!e._holiday);
+    if (!eventsMap[key].length) delete eventsMap[key];
+  } else {
+    const id = 'hl_' + Date.now();
+    eventsMap[key] = list.concat([{ id, title: '__HOLIDAY__', notes: 'Holiday', time:'', color:'#ef4444', _holiday:true }]);
+  }
+  persist(); renderCalendar(viewDate); updateSidebar();
+});
+
+// persist eventsMap
+function persist(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(eventsMap)); }
+
+// export CSV (simple)
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const rows = [['date','title','time','notes','color','meta']];
+  for (const date in eventsMap) {
+    for (const ev of eventsMap[date]) {
+      rows.push([date, ev.title, ev.time || '', ev.notes || '', ev.color || '', ev._holiday ? 'holiday' : '']);
+    }
+  }
+  const csv = rows.map(r => r.map(c => `"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${USER}-events.csv`; a.click();
+});
+
+// import CSV
+document.getElementById('importBtn').addEventListener('click', () => {
+  const inp = document.createElement('input'); inp.type='file'; inp.accept='.csv,text/csv';
+  inp.onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const txt = await f.text();
+    parseImportCSV(txt);
+  };
+  inp.click();
+});
+function parseImportCSV(txt){
+  // very simple CSV parser assuming the format produced by export
+  const lines = txt.split(/\r?\n/).filter(Boolean);
+  const data = lines.slice(1).map(line => {
+    // naive split CSV by commas but handle quotes
+    const parts = [];
+    let cur = '', inq=false;
+    for (let i=0;i<line.length;i++){
+      const ch = line[i];
+      if (ch === '"' ) { inq = !inq; continue; }
+      if (ch === ',' && !inq) { parts.push(cur); cur=''; continue; }
+      cur += ch;
+    }
+    if (cur !== '') parts.push(cur);
+    return parts;
+  });
+  for (const p of data){
+    const [date, title, time, notes, color, meta] = p;
+    if (!date) continue;
+    if (!eventsMap[date]) eventsMap[date] = [];
+    const id = 'imp_' + Date.now() + '_' + Math.floor(Math.random()*999);
+    const ev = { id, title: title||'Imported', time: time||'', notes: notes||'', color: color||'#0b74ff' };
+    if ((meta||'').includes('holiday')) ev._holiday = true;
+    eventsMap[date].push(ev);
+  }
+  persist();
+  renderCalendar(viewDate); updateSidebar();
+  alert('Import complete');
+}
+
+// search
+document.getElementById('searchBtn').addEventListener('click', doSearch);
+document.getElementById('search').addEventListener('keydown', (e)=>{ if (e.key==='Enter') doSearch(); });
+function doSearch(){
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  if (!q) { alert('Enter search term'); return; }
+  const matches = [];
+  for (const date in eventsMap){
+    for (const ev of eventsMap[date]){
+      if ((ev.title||'').toLowerCase().includes(q) || (ev.notes||'').toLowerCase().includes(q)) matches.push({ date, ev });
+    }
+  }
+  if (!matches.length) { alert('No matches'); return; }
+  // show first match and highlight
+  const m = matches[0];
+  const [y,mn,day] = m.date.split('-').map(Number);
+  renderCalendar(new Date(y,mn-1,1));
+  selectDate(new Date(y,mn-1,day));
+  // optionally flash the item (not implemented)
+  alert(`Found ${matches.length} matching events. Showing first: ${m.date} → ${m.ev.title}`);
+}
+
+// keyboard shortcuts
+window.addEventListener('keydown', e => {
+  if (e.key === 'n' || e.key==='N') { openAddModal(); }
+  if (e.key === 'ArrowLeft') { viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1); renderCalendar(viewDate); }
+  if (e.key === 'ArrowRight') { viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1); renderCalendar(viewDate); }
+});
+
+// wire add button
+document.getElementById('addEventBtn').addEventListener('click', openAddModal);
+
+// wire prev/next/today
+document.getElementById('prevBtn').addEventListener('click', ()=>{ viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1); renderCalendar(viewDate); });
+document.getElementById('nextBtn').addEventListener('click', ()=>{ viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1); renderCalendar(viewDate); });
+document.getElementById('todayBtn').addEventListener('click', ()=>{ renderCalendar(new Date()); });
+
+// month/year selector changes
+document.getElementById('monthSelect').addEventListener('change', (e) => {
+  const m = Number(e.target.value);
+  viewDate = new Date(viewDate.getFullYear(), m, 1);
+  renderCalendar(viewDate);
+});
+document.getElementById('yearSelect').addEventListener('change', (e) => {
+  const y = Number(e.target.value);
+  viewDate = new Date(y, viewDate.getMonth(), 1);
+  renderCalendar(viewDate);
+});
+
+// utility escape
+function escapeHTML(s){ return String(s||'').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+
+// init
+window.addEventListener('load', () => {
+  // ensure year range includes current
+  populateSelectors();
+  if (!selectedDate) selectedDate = new Date();
+  renderCalendar(new Date());
+});
+</script>
+</body>
+</html>
