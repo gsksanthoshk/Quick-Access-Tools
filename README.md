@@ -1,5 +1,4 @@
-# QAT
-<!doctype html>
+# Quick Access Tool
 <html lang="en">
 <head>
   <meta charset="utf-8" />
